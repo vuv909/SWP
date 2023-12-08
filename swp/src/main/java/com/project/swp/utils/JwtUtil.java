@@ -1,6 +1,7 @@
 package com.project.swp.utils;
 
 import java.security.Key;
+import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -20,10 +21,11 @@ import io.jsonwebtoken.security.Keys;
 @Component
 public class JwtUtil {
 
-	private static final Key SIGNING_KEY = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+	private static final String SIGNING_KEY = "aLcGQFJB8HdvX1Vj7Imy9wP5gN2bW3EYs6qoKDtuZfTh0k4RxSaMzniUOrpCe";
 
 	private Key getSigninKey() {
-		return SIGNING_KEY;
+		byte[] apiKeySecretBytes = Base64.getEncoder().encode(SIGNING_KEY.getBytes());
+		return Keys.hmacShaKeyFor(apiKeySecretBytes);
 	}
 
 	public String generateToken(TokenObject tokenObject) {
@@ -44,7 +46,7 @@ public class JwtUtil {
 	public String generateRefreshToken(Map<String, Object> extraClaims, TokenObject tokenObject) {
 		return Jwts.builder().setClaims(extraClaims).setSubject(tokenObject.toString())
 				.setIssuedAt(new Date(System.currentTimeMillis()))
-				.setExpiration(new Date(System.currentTimeMillis() + 604800000)) // 7 day
+				.setExpiration(new Date(System.currentTimeMillis() + 10000)) // 7 day
 				.signWith(getSigninKey(), SignatureAlgorithm.HS256).compact();
 	}
 
@@ -73,7 +75,7 @@ public class JwtUtil {
 		return extractClaim(token, Claims::getExpiration);
 	}
 
-	private boolean isTokenExpired(String token) {
+	public boolean isTokenExpired(String token) {
 		return extractClaim(token, Claims::getExpiration).before(new Date());
 	}
 }

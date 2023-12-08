@@ -25,7 +25,9 @@ public interface AuthService {
 
 	ResponseEntity<?> verifyAgainUser(String email);
 
-	ResponseEntity<?> forgotPassword(ForgotPasswordDto forgotPasswordDto);
+//	ResponseEntity<?> forgotPassword(ForgotPasswordDto forgotPasswordDto);
 
 	ResponseEntity<?> changePassword(ChangePasswordDTO changePasswordDTO);
+
+	ResponseEntity<?> refreshToken(Long id, String email);
 }

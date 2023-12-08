@@ -1,6 +1,7 @@
 package com.project.swp.services.auth;
 
 import java.io.UnsupportedEncodingException;
+import java.util.Base64;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
@@ -8,6 +9,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,11 +28,14 @@ import com.project.swp.dto.ChangePasswordDTO;
 import com.project.swp.dto.CheckMailDTO;
 import com.project.swp.dto.ForgotPasswordDto;
 import com.project.swp.dto.SignupRequest;
+import com.project.swp.dto.TokenObject;
 import com.project.swp.dto.UserDto;
 import com.project.swp.entities.User;
 import com.project.swp.enums.UserRole;
 import com.project.swp.repository.UserRepo;
+import com.project.swp.utils.JwtUtil;
 
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.annotation.PostConstruct;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
@@ -42,6 +48,9 @@ public class AuthServiceImpl implements AuthService {
 	private final JavaMailSender javaMailSender;
 
 	private final JavaMailSenderImpl javaMailSenderImp;
+
+	@Autowired
+	private JwtUtil jwtUtil;
 
 	@Autowired
 	private RestTemplate restTemplate;
@@ -73,10 +82,10 @@ public class AuthServiceImpl implements AuthService {
 	public boolean sendVerificationeEmail(User user, Long otpVerificationMail) {
 		try {
 			String subject = "Please verify your registration";
-			String senderName = "Verify account";
+			String senderName = "OTP Code";
 			String mailContent = "<p>Dear " + user.getName() + ",</p>";
-			mailContent += "<p>Please click the link below to verify your account !!!</p>";
 			mailContent += "<h3>This is your OTP code : " + otpVerificationMail + "</h3>";
+			mailContent += "<p>Please use it to verity !!! !!!</p>";
 			mailContent += "<p>Thank you</p>";
 
 			MimeMessage message = javaMailSender.createMimeMessage();
@@ -111,7 +120,9 @@ public class AuthServiceImpl implements AuthService {
 				User update = userRepo.save(user.get());
 				UserDto userDto = new UserDto();
 				userDto.setId(user.get().getId());
-				return ResponseEntity.ok(userDto);
+				Map<String, Object> success = new HashMap<>();
+				success.put("success", "Otp send successfully !!!");
+				return ResponseEntity.ok(success);
 			} else {
 				Map<String, Object> error = new HashMap<>();
 				error.put("errorSendOtp", "Otp send not successfully !!!");
@@ -133,6 +144,10 @@ public class AuthServiceImpl implements AuthService {
 				CheckMailDTO.class);
 
 		if (response != null && response.isSmtpCheck()) {
+
+			String passwordRegex = "^(?=.*[A-Z])(?=.*[@#$%^&+=!])(?=\\S+$).{8,}$";
+			Pattern patternPassword = Pattern.compile(passwordRegex);
+			Matcher matcherPassword = patternPassword.matcher(signupRequest.getPassword());
 
 			Optional<User> findUserByEmail = userRepo.findFirstByEmail(signupRequest.getEmail());
 
@@ -180,6 +195,7 @@ public class AuthServiceImpl implements AuthService {
 				error.put("errorSend", "Error when send OTP !!!");
 				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
 			}
+
 		} else {
 			Map<String, String> error = new HashMap<String, String>();
 			error.put("errorEmailValid", "Email is not valid !!!");
@@ -235,54 +251,6 @@ public class AuthServiceImpl implements AuthService {
 	}
 
 	@Override
-	public ResponseEntity<?> forgotPassword(ForgotPasswordDto forgotPasswordDto) {
-
-		String otpString = ThreadLocalRandom.current().nextLong(1000000000L, 10000000000L) + "";
-		Long otpVerificationMail = Long.parseLong(otpString);
-
-		Optional<User> optionalUser = userRepo.findFirstByEmail(forgotPasswordDto.getEmail());
-
-		if (optionalUser.isPresent()) {
-
-			boolean checkEmail = sendVerificationeEmail(optionalUser.get(), otpVerificationMail);
-
-			if (checkEmail == true) {
-
-				Date currentDate = new Date();
-				Date checkDate = optionalUser.get().getTimeOtpEmailValid();
-
-				if (checkDate.after(currentDate)) {
-					optionalUser.get().setPassword(new BCryptPasswordEncoder().encode(forgotPasswordDto.getPassword()));
-					userRepo.save(optionalUser.get());
-					Map<String, Object> success = new HashMap<String, Object>();
-					success.put("success", "Change password successfully !!!");
-					return ResponseEntity.ok(success);
-				} else if (checkDate.before(currentDate)) {
-					Map<String, Object> error = new HashMap<String, Object>();
-					error.put("errorOtp", "OTP is invalid time !!!");
-					return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
-				} else {
-
-					optionalUser.get().setPassword(new BCryptPasswordEncoder().encode(forgotPasswordDto.getPassword()));
-					userRepo.save(optionalUser.get());
-					Map<String, Object> success = new HashMap<String, Object>();
-					success.put("success", "Change password successfully !!!");
-					return ResponseEntity.ok(success);
-				}
-
-			} else {
-				Map<String, Object> error = new HashMap<String, Object>();
-				error.put("errorSend", "Error when send OTP !!!");
-				return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
-			}
-
-		}
-		Map<String, String> error = new HashMap<String, String>();
-		error.put("errorEmail", "Email or OTP is not exist !!!");
-		return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
-	}
-
-	@Override
 	public ResponseEntity<?> changePassword(ChangePasswordDTO changePasswordDTO) {
 
 		Optional<User> optionalUser = userRepo.findFirstByEmail(changePasswordDTO.getEmail());
@@ -298,6 +266,47 @@ public class AuthServiceImpl implements AuthService {
 		Map<String, String> error = new HashMap<String, String>();
 		error.put("errorEmail", "Email is not exist !!!");
 		return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+	}
+
+
+	@Override
+	public ResponseEntity<?> refreshToken(Long id, String email) {
+		Optional<User> optionalUser = userRepo.findFirstByIdAndEmail(id, email);
+		try {
+
+			if (optionalUser.isPresent()) {
+
+				String tokenValue = jwtUtil.extractUserName(optionalUser.get().getRefreshToken());
+				String[] tokenParts = tokenValue.split(",");
+				Long idToken = Long.parseLong(tokenParts[0].split(":")[1]);
+				String emailToken = tokenParts[1].split(":")[1];
+				UserRole roleToken = UserRole.valueOf(tokenParts[2].split(":")[1]);
+
+				TokenObject tokenObject = new TokenObject();
+				tokenObject.setId(idToken);
+				tokenObject.setEmail(emailToken);
+				tokenObject.setRole(roleToken);
+
+				String newAccessToken = jwtUtil.generateToken(tokenObject);
+
+				Map<String, Object> success = new HashMap<>();
+				success.put("jwt", newAccessToken);
+
+				return ResponseEntity.ok(success);
+			} else {
+				Map<String, String> error = new HashMap<>();
+				error.put("errorUser", "Refresh token failed because user was not found!!!");
+				return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+			}
+		} catch (ExpiredJwtException e) {
+
+			optionalUser.get().setRefreshToken("");
+			userRepo.save(optionalUser.get());
+
+			Map<String, String> error = new HashMap<>();
+			error.put("errorExpired", "Refresh token expired and you must log in again!!!");
+			return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+		}
 	}
 
 }
