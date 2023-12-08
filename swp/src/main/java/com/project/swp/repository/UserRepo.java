@@ -23,5 +23,7 @@ public interface UserRepo extends JpaRepository<User, Long> {
 
 	Optional<User> findFirstByEmailAndOtpVerifyMail(String email, Long otp);
 
+	Optional<User> findFirstByIdAndEmail(Long id, String email);
+
 
 }

@@ -32,6 +32,7 @@ import com.project.swp.dto.ForgotPasswordDto;
 import com.project.swp.dto.HashToken;
 import com.project.swp.dto.OtpEmailDto;
 import com.project.swp.dto.SignupRequest;
+import com.project.swp.dto.RefreshTokenDto;
 import com.project.swp.dto.TokenObject;
 import com.project.swp.dto.UserDto;
 import com.project.swp.entities.User;
@@ -72,16 +73,14 @@ public class AuthController {
 	}
 
 	// hash token
-//	@PostMapping("/refreshtoken")
-//	public ResponseEntity<?> tokenValue(@RequestBody HashToken token) {
-//
-//		String tokenValue = jwtUtil.extractUserName(token.getToken());
-//		if (tokenValue == null) {
-//			return new ResponseEntity<>("Token not valid !!!", HttpStatus.BAD_REQUEST);
-//		}
-//		return new ResponseEntity<>(tokenValue, HttpStatus.ACCEPTED);
-//
-//	}
+	@PostMapping("/refreshtoken")
+	public ResponseEntity<?> refreshToken(@RequestBody RefreshTokenDto token) {
+		if (token == null) {
+			return new ResponseEntity<>("Token not valid !!!", HttpStatus.BAD_REQUEST);
+		} else {
+			return authService.refreshToken(token.getId(), token.getEmail());
+		}
+	}
 
 	// hash token
 	@PostMapping("/tokencode")
@@ -99,49 +98,18 @@ public class AuthController {
 	public ResponseEntity<?> signupUser(@RequestBody SignupRequest signupRequest)
 			throws UnsupportedEncodingException, MessagingException {
 
-//		CheckMailDTO response = restTemplate.getForObject(
-//				"https://emailverification.whoisxmlapi.com/api/v3?apiKey=at_7GFRvMURmX39VzkJkrPlMOai69aOX&emailAddress="
-//						+ signupRequest.getEmail(),
-//				CheckMailDTO.class);
-//
-//		if (response != null && response.isSmtpCheck()) {
-//
-//			String emailRegex = "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$";
-//			String passwordRegex = "^(?=.*[A-Z])(?=.*[@#$%^&+=!])(?=\\S+$).{8,}$";
-//			Pattern pattern = Pattern.compile(emailRegex);
-//			Matcher matcher = pattern.matcher(signupRequest.getEmail());
-//			Pattern patternPassword = Pattern.compile(passwordRegex);
-//			Matcher matcherPassword = patternPassword.matcher(signupRequest.getPassword());
-//
-//			if (matcher.matches()) {
-//
-//				if (matcherPassword.matches()) {
-//
-//					UserDto userDto = authService.createUser(signupRequest);
-//					if (userDto == null) {
-//						Map<String, String> error = new HashMap<>();
-//						error.put("error", "Email is not exist in google cloud !");
-//						return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
-//					}
-//					return new ResponseEntity<>(userDto, HttpStatus.CREATED);
-//				} else {
-//					Map<String, String> error = new HashMap<String, String>();
-//					error.put("errorPassword",
-//							"Please input password with least 8 character , 1upppercase and 1 special character");
-//					return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
-//				}
-//			} else {
-//				Map<String, String> error = new HashMap<String, String>();
-//				error.put("errorEmail", "Email is not correct format !!!");
-//				return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
-//			}
-//		} else {
-//			Map<String, String> error = new HashMap<String, String>();
-//			error.put("errorEmailExist", "Email is not exist !!!");
-//			return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
-//		}
+		String passwordRegex = "^(?=.*[A-Z])(?=.*[@#$%^&+=!])(?=\\S+$).{8,}$";
+		Pattern patternPassword = Pattern.compile(passwordRegex);
+		Matcher matcherPassword = patternPassword.matcher(signupRequest.getPassword());
 
-		return authService.createUser(signupRequest);
+		if (matcherPassword.matches()) {
+			return authService.createUser(signupRequest);
+		} else {
+			Map<String, String> error = new HashMap<String, String>();
+			error.put("errorPassword",
+					"Password at least 8 characrter , 1 uppercase , 1 special character and should not contain any whitespace characters.  !!!");
+			return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+		}
 
 	}
 
@@ -188,7 +156,10 @@ public class AuthController {
 				authenticationResponse.setUserRole(optionalUser.get().getRole());
 				authenticationResponse.setUserId(optionalUser.get().getId());
 
-				return ResponseEntity.ok(authenticationResponse);
+				Map<String, Object> success = new HashMap<String, Object>();
+				success.put("jwt", jwt);
+
+				return ResponseEntity.ok(success);
 			} else {
 				Map<String, String> error = new HashMap<String, String>();
 				error.put("errorLogin", "Your account is not verified !!!");
@@ -205,14 +176,6 @@ public class AuthController {
 	@PostMapping("/verifyOtpEmail")
 	public ResponseEntity<?> verifyOtpEmail(@RequestBody OtpEmailDto opt) {
 
-//		if (userDto == null) {
-//			Map<String, Object> error = new HashMap<>();
-//			error.put("errorVerify", "Otp is not valid !!!");
-//			return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
-//		}
-//		Map<String, Object> user = new HashMap<>();
-//		user.put("id", userDto.getId());
-//		user.put("enabled", userDto.isEnabled());
 		return authService.verifyUser(opt.getOtp(), opt.getEmail());
 
 	}
@@ -220,15 +183,6 @@ public class AuthController {
 	@PostMapping("/verifyAgainOtpEmail")
 	public ResponseEntity<?> verifyAgainOtpEmail(@RequestBody UserDto userDtoVerify) {
 
-//		if (userDto == null) {
-//			Map<String, Object> error = new HashMap<>();
-//			error.put("errorVerify", "Otp is not valid !!!");
-//			return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
-//		}
-//
-//		Map<String, Object> success = new HashMap<>();
-//		success.put("success", "Otp is sended !!!");
-//		return new ResponseEntity<>(success, HttpStatus.ACCEPTED);
 		return authService.verifyAgainUser(userDtoVerify.getEmail());
 	}
 
@@ -251,15 +205,27 @@ public class AuthController {
 //	}
 
 	// forgot password
-	@PostMapping("/forgotpassword")
-	public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordDto forgotPasswordDto) {
-		return authService.forgotPassword(forgotPasswordDto);
-	}
+//	@PostMapping("/forgotpassword")
+//	public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordDto forgotPasswordDto) {
+//		return authService.forgotPassword(forgotPasswordDto);
+//	}
 
 	// change password
 	@PostMapping("/changepassword")
 	public ResponseEntity<?> changePassword(@RequestBody ChangePasswordDTO changePasswordDTO) {
-		return authService.changePassword(changePasswordDTO);
+
+		String passwordRegex = "^(?=.*[A-Z])(?=.*[@#$%^&+=!])(?=\\S+$).{8,}$";
+		Pattern patternPassword = Pattern.compile(passwordRegex);
+		Matcher matcherPassword = patternPassword.matcher(changePasswordDTO.getPassword());
+
+		if (matcherPassword.matches()) {
+			return authService.changePassword(changePasswordDTO);
+		} else {
+			Map<String, String> error = new HashMap<String, String>();
+			error.put("errorPassword",
+					"Password at least 8 characrter , 1 uppercase , 1 special character and should not contain any whitespace characters.  !!!");
+			return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+		}
 	}
 
 }

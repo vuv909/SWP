@@ -6,7 +6,6 @@ public class AuthenticationResponse{
   private String jwt;
   private UserRole userRole;
   private Long userId;
-  private String msg;
 public String getJwt() {
 	return jwt;
 }
@@ -24,12 +23,6 @@ public Long getUserId() {
 }
 public void setUserId(Long userId) {
 	this.userId = userId;
-}
-public String getMsg() {
-	return msg;
-}
-public void setMsg(String msg) {
-	this.msg = msg;
 }
 
 
